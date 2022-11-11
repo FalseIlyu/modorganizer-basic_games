@@ -232,14 +232,14 @@ class BlackAndWhite2LocalSavegames(mobase.LocalSavegames):
         self._savesDir = myGameSaveDir.absolutePath()
 
     def mappings(self, profile_save_dir):
-        m = mobase.Mapping()
+        mappings = mobase.Mapping()
 
-        m.createTarget = True
-        m.isDirectory = True
-        m.source = profile_save_dir.absolutePath()
-        m.destination = self._savesDir
+        mappings.createTarget = True
+        mappings.isDirectory = True
+        mappings.source = profile_save_dir.absolutePath()
+        mappings.destination = self._savesDir
 
-        return [m]
+        return [mappings]
 
     def prepareProfile(self, profile):
         return profile.localSavesEnabled()
@@ -348,7 +348,7 @@ class BlackAndWhite2Game(BasicGame, mobase.IPluginFileMapper):
     GameDocumentsDirectory = "%DOCUMENTS%/Black & White 2"
     GameSavesDirectory = "%GAME_DOCUMENTS%/Profiles"
 
-    _program_link = PSTART_MENU + "\\Black & White 2\\Black & White® 2.lnk"
+    _programLink = PSTART_MENU + "\\Black & White 2\\Black & White® 2.lnk"
 
     def init(self, organizer: mobase.IOrganizer) -> bool:
         super().init(organizer)
@@ -362,20 +362,36 @@ class BlackAndWhite2Game(BasicGame, mobase.IPluginFileMapper):
     def detectGame(self):
         super().detectGame()
 
-        program_path = Path(self._program_link)
-        if program_path.exists():
-            installation_path = Path(QFileInfo(self._program_link).symLinkTarget())
-            if installation_path.exists():
-                self.setGamePath(installation_path.parent)
+        programPath = Path(self._programLink)
+        if programPath.exists():
+            installationPath = Path(QFileInfo(self._programLink).symLinkTarget())
+            if installationPath.exists():
+                self.setGamePath(installationPath.parent)
 
         return
 
     def executables(self) -> List[mobase.ExecutableInfo]:
         execs = super().executables()
 
-        """
-        A bat file to load modded executables from VFS.
-        """
+        iModList = self._organizer.modList()
+        modNameList = iModList.allMods()
+        workaroundPath = self._gamePath + "/" + self.GameBinary[:-4] + ".bat"
+        for modName in modNameList:
+            iMod = iModList.getMod(modName)
+            if iModList.state(modName) & mobase.ModState.ACTIVE:
+                modPath = Path(iMod.absolutePath())
+                execName = modName
+                if modPath:
+                    for exePath in modPath.glob('*.exe'):
+                        if "white.exe" not in exePath.as_uri():
+                            execName = f"{modName} ({exePath.name})"
+                        execInfo = mobase.ExecutableInfo(
+                                execName, QFileInfo(str(exePath))
+                            )
+                        execInfo.withWorkingDirectory(self.gameDirectory())
+                        execs.append(execInfo)
+
+        # A bat file to load modded executables from VFS.
         workaroundPath = self._gamePath + "/" + self.GameBinary[:-4] + ".bat"
 
         try:
@@ -426,7 +442,7 @@ class BOTGGame(BlackAndWhite2Game):
     GameDocumentsDirectory = "%DOCUMENTS%/Black & White 2 - Battle of the Gods"
     GameSavesDirectory = "%GAME_DOCUMENTS%/Profiles"
 
-    _program_link = (
+    _programLink = (
         PSTART_MENU + "\\Black & White 2 Battle of the Gods"
         "\\Black & White® 2 Battle of the Gods.lnk"
     )
